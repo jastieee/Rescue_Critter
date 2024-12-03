@@ -1,202 +1,267 @@
 import 'package:flutter/material.dart';
-import 'package:rescrit/const.dart'; // Assuming this contains the `bgcolor` definition.
+import 'package:http/http.dart' as http; // Import the http package
+import 'package:rescrit/const.dart'; // Assuming this contains the bgcolor definition.
 
 class Control extends StatefulWidget {
   const Control({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
   _ControlState createState() => _ControlState();
 }
 
 class _ControlState extends State<Control> {
-  // Add a state variable for the thermal switch
-  bool isThermalOn = false;
+  String? _activeButton; // Tracks the currently active button for shadows
+
+  // Handle joystick and camera button actions
+  void _handleJoystickAction(String action) {
+    setState(() {
+      _activeButton = action;
+    });
+
+    print('Action triggered: $action');
+    
+    // Send HTTP request to ESP8266 based on the action
+    _sendActionToESP(action);
+  }
+
+  void _stopAction() {
+    setState(() {
+      _activeButton = null;
+    });
+    print('Stop action triggered');
+    // Send stop action to ESP8266
+    _sendActionToESP('stop');
+  }
+
+  Future<void> _sendActionToESP(String action) async {
+    String url = 'http://192.168.226.47/control?action=$action'; // Add the action parameter
+
+    try {
+      // Send HTTP GET request to the ESP8266
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) { 
+        // Successfully triggered the action
+        print('ESP8266 Response: ${response.body}');
+      } else {
+        // Handle error if the request fails
+        print('Failed to send action: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error sending action to ESP8266: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        title: const Text('Control Screen', style: TextStyle(color: Colors.black)),
-        centerTitle: true,
-        leading: IconButton(
-          icon: Image.asset('assets/icons/home.png'), // Home icon
-          onPressed: () {
-            Navigator.of(context).pushNamed('/home'); // Navigate to Home screen
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: Image.asset('assets/icons/set1.png', color: Colors.black),
-            onPressed: () {
-              // Implement settings action
-            },
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Container(color: bgcolor), // Background color
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Image.asset(
-                'assets/icons/bg.png', // Background image
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          // Camera view container
-          Positioned.fill(
-            child: Container(
-              width: double.infinity,
-              height: double.infinity,
-              color: Colors.transparent,
-              child: const Center(
-                child: Text("Camera Tile"), // Placeholder for the camera widget
-              ),
-            ),
-          ),
-          // Beacon Button at the top-left
-          Positioned(
-            top: 2,
-            left: 30,
-            child: GestureDetector(
-              onTap: () {
-                // Show the dialog with the release beacon image
-                _showReleaseBeaconDialog(context);
-              },
-              child: Image.asset(
-                'assets/icons/beacon_button.png',
-                width: 100,
-                height: 100,
-              ),
-            ),
-          ),
-          // Thermal switch with embedded on/off toggle
-          Positioned(
-            top: 20, // Adjusted to the top
-            right: 20, // Adjusted to the right
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Thermal', // Label above the image
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Stack(
-                      alignment: Alignment.center, // Align switch over the image
-                      children: [
-                        Image.asset(
-                          'assets/icons/thermal_switch.png', // Thermal PNG
-                          width: 150, // Adjusted size
-                          height: 150,
-                        ),
-                        Transform.scale(
-                          scale: 1.5, // Resize the switch
-                          child: Switch(
-                            value: isThermalOn,
-                            onChanged: (bool value) {
-                              setState(() {
-                                isThermalOn = value; // Update the switch state
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      isThermalOn ? 'On' : 'Off', // Label below the image
-                      style: TextStyle(
-                        color: isThermalOn ? Colors.green : Colors.red, // Dynamic color
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            bottom: 20,
-            left: 70,
-            child: Column(
-              children: [
-                Image.asset(
-                  'assets/icons/controller_bot.png',
-                  width: 70,
-                  height: 70,
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-          Positioned(
-            // Camera controller at the bottom-right
-            bottom: 20,
-            right: 70, // Adjusted to the right side
-            child: Column(
-              children: [
-                Image.asset(
-                  'assets/icons/controller_cam.png',
-                  width: 70, // Increased size
-                  height: 70,
-                ),
-                const SizedBox(height: 10),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    return Stack(
+      children: [
+        // Background color
+        Container(color: bgcolor),
 
-  // Method to show the dialog with the release beacon image
-  void _showReleaseBeaconDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: Stack(
+        // Background image
+        Positioned.fill(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Image.asset(
+              'assets/icons/bg.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        // Joystick on the left side
+        Positioned(
+          left: 80,
+          bottom: 60,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: Image.asset(
-                  'assets/icons/release_beacon.png', // Image to display in the dialog
-                  width: 200, // Adjust size as needed
-                  height: 200, // Adjust size as needed
+              GestureDetector(
+                onTapDown: (_) => _handleJoystickAction('up'),
+                onTapUp: (_) => _stopAction(),
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: _activeButton == 'up'
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Image.asset(
+                    'assets/icons/up-move-icon.png',
+                    width: 80,
+                    height: 80,
+                  ),
                 ),
               ),
-             Positioned(
-              top: 10,
-              left: 10,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.2), // Transparent white with 20% opacity
-                  borderRadius: BorderRadius.circular(8), // Optional: Rounded corners for the box
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () {
-                    Navigator.of(context).pop(); // Close the dialog
-                  },
+              const SizedBox(height: 0),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTapDown: (_) => _handleJoystickAction('left'),
+                    onTapUp: (_) => _stopAction(),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        boxShadow: _activeButton == 'left'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.5),
+                                  blurRadius: 10,
+                                  offset: const Offset(-5, 0),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Image.asset(
+                        'assets/icons/left-move-icon.png',
+                        width: 80,
+                        height: 80,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 30),
+                  GestureDetector(
+                    onTapDown: (_) => _handleJoystickAction('right'),
+                    onTapUp: (_) => _stopAction(),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        boxShadow: _activeButton == 'right'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.5),
+                                  blurRadius: 10,
+                                  offset: const Offset(5, 0),
+                                  
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: Image.asset(
+                        'assets/icons/right-move-icon.png',
+                        width: 80,
+                        height: 80,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 0),
+              GestureDetector(
+                onTapDown: (_) => _handleJoystickAction('down'),
+                onTapUp: (_) => _stopAction(),
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: _activeButton == 'down'
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, -5),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Image.asset(
+                    'assets/icons/down-move-icon.png',
+                    width: 80,
+                    height: 80,
+                  ),
                 ),
               ),
-            )
             ],
           ),
-        );
-      },
+        ),
+        // Left and Right camera buttons
+        Positioned(
+          right: 80,
+          bottom: 135,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTapDown: (_) => _handleJoystickAction('left-camera'),  // Trigger left-camera action on press
+                onTapUp: (_) => _stopAction(),  // Stop action when released
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: _activeButton == 'left-camera'
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Image.asset(
+                    'assets/icons/left-camera-icon.png',
+                    width: 80,
+                    height: 80,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 30),
+              GestureDetector(
+                onTapDown: (_) => _handleJoystickAction('right-camera'),  // Trigger right-camera action on press
+                onTapUp: (_) => _stopAction(),  // Stop action when released
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: _activeButton == 'right-camera'
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Image.asset(
+                    'assets/icons/right-camera-icon.png',
+                    width: 80,
+                    height: 80,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+       // Home button on top of all layers
+        Positioned(
+          top: 20, // Adjust as needed
+          left: 20, // Adjust as needed
+          child: GestureDetector(
+            onTap: () {
+              Navigator.of(context).pushNamed('/home');
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.7), // Semi-transparent background color for the box
+                borderRadius: BorderRadius.circular(10), // Rounded corners
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(2, 2),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(8), // Padding inside the box
+              child: Image.asset(
+                'assets/icons/home.png',
+                width: 40,
+                height: 40,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

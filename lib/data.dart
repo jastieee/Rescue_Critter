@@ -1,18 +1,65 @@
+import 'dart:async'; // Import Timer
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart'; // Import fl_chart package
-import 'package:rescrit/const.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class Data extends StatefulWidget {
   const Data({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
   _DataState createState() => _DataState();
 }
 
 class _DataState extends State<Data> {
-  // State variable to track the selected data type (Humidity or Temperature)
-  bool isHumiditySelected = true; // Start with Humidity selected
+  String loRaData = "";
+  late Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchLoRaData(); // Initial fetch when screen loads
+    _timer = Timer.periodic(Duration(seconds: 5), (timer) {
+      fetchLoRaData(); // Fetch data every 5 seconds
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel(); // Stop the timer when the screen is disposed
+    super.dispose();
+  }
+
+  // Function to fetch LoRa data from the ESP8266 server
+  Future<void> fetchLoRaData() async {
+    try {
+      final response = await http.get(Uri.parse('http://192.168.226.140/getLoRaData'));
+
+      if (response.statusCode == 200) {
+        var data = response.body;
+
+        // Fix the malformed JSON as described earlier
+        data = data.replaceAll('"temperature": "temperature":', '"temperature":');
+
+        // Now parse the fixed JSON
+        var decodedData = jsonDecode(data);
+
+        print('Raw LoRa Packet: ${response.body}'); // Prints the raw JSON packet from LoRa
+
+        setState(() {
+          // Access the nested humidity and temperature values correctly
+          double humidity = decodedData['humidity'] != null ? decodedData['humidity']['humidity']?.toDouble() : 0.0;
+          double temperature = decodedData['humidity'] != null ? decodedData['humidity']['temperature']?.toDouble() : 0.0;
+          loRaData = 'Humidity: $humidity, Temperature: $temperature';
+        });
+
+        print('LoRa Data: $loRaData');  // Prints the processed data
+      } else {
+        throw Exception('Failed to load LoRa data');
+      }
+    } catch (e) {
+      print('Error fetching data: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,193 +69,51 @@ class _DataState extends State<Data> {
         title: const Text('Data', style: TextStyle(color: Colors.black)),
         centerTitle: true,
         leading: IconButton(
-          icon: Image.asset('assets/icons/home.png'), // Use home icon instead of menu
+          icon: Image.asset('assets/icons/home.png'),
           onPressed: () {
-            Navigator.of(context).pushNamed('/home'); // Navigate to Home screen
+            Navigator.of(context).pushNamed('/home');
           },
         ),
-        actions: [
-          IconButton(
-            icon: Image.asset('assets/icons/set1.png', color: Colors.black),
-            onPressed: () {
-              // Implement settings action
-            },
-          ),
-        ],
       ),
       body: Stack(
         children: [
-          Container(
-            color: bgcolor,
-          ),
+          Container(color: Colors.blue),
           Positioned.fill(
             child: Align(
               alignment: Alignment.centerRight,
-              child: Image.asset(
-                'assets/icons/bg.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/icons/bg.png', fit: BoxFit.cover),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16.0), // Add padding for layout
-            child: Row(
-              children: [
-                // Left column for icons (Humidity and Temperature)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          isHumiditySelected = true; // Switch to Humidity view
-                        });
-                      },
-                      child: buildIconTile('assets/icons/humidity.png'),
-                    ),
-                    const SizedBox(height: 20), // Space between icons
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          isHumiditySelected = false; // Switch to Temperature view
-                        });
-                      },
-                      child: buildIconTile('assets/icons/temperature.png'),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(width: 20), // Space between icons and the data box
-
-                // Right side box for graph (transparent)
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16.0),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent, // Make the background transparent
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.1),
-                          spreadRadius: 2,
-                          blurRadius: 4,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Display the title (Temperature or Humidity)
-                        Text(
-                          isHumiditySelected ? 'Humidity' : 'Temperature',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,  // Set the color to white
-                          ),
-                        ),
-
-                        const SizedBox(height: 10), // Space between title and content
-
-                        // Display graph based on selection (Humidity or Temperature)
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: !isHumiditySelected
-                                ? LineChart(
-                                    LineChartData(
-                                      gridData: const FlGridData(show: true),
-                                      titlesData: const FlTitlesData(
-                                        leftTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: true),
-                                        ),
-                                        bottomTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: true),
-                                        ),
-                                        topTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
-                                        ),
-                                        rightTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
-                                        ),
-                                      ),
-                                      borderData: FlBorderData(show: true),
-                                      lineBarsData: [
-                                        LineChartBarData(
-                                          spots: [
-                                            const FlSpot(0, 20), // Starting at 20°C
-                                            const FlSpot(1, 30),  // Higher spike at point 1
-                                            const FlSpot(2, 15),  // Drop back to baseline
-                                            const FlSpot(3, 25),  // Moderate spike
-                                            const FlSpot(4, 22),  // Slight drop
-                                            const FlSpot(5, 28),  // Another spike
-                                          ],
-                                          isCurved: true,
-                                          color: Colors.orange, // Use a color for temperature (e.g., orange)
-                                          barWidth: 3,
-                                          belowBarData: BarAreaData(show: true, color: Colors.orange.withOpacity(0.3)),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : LineChart(
-                                    LineChartData(
-                                      gridData: const FlGridData(show: true),
-                                      titlesData: const FlTitlesData(
-                                        leftTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: true),
-                                        ),
-                                        bottomTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: true),
-                                        ),
-                                        topTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
-                                        ),
-                                        rightTitles: AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
-                                        ),
-                                      ),
-                                      borderData: FlBorderData(show: true),
-                                      lineBarsData: [
-                                        LineChartBarData(
-                                          spots: [
-                                            const FlSpot(0, 0), // Starting point for humidity (e.g., 0%)
-                                            const FlSpot(1, 5),  // Humidity spike
-                                            const FlSpot(2, 0),  // Back to baseline
-                                            const FlSpot(3, 3),  // Slight increase
-                                            const FlSpot(4, 4),  // Higher spike
-                                            const FlSpot(5, 0),  // Back to baseline
-                                          ],
-                                          isCurved: true,
-                                          color: Colors.purple, // Use purple for humidity
-                                          barWidth: 3,
-                                          belowBarData: BarAreaData(show: true, color: Colors.purple.withOpacity(0.3)),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
+          Center( // Added Center widget to center the entire Column
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center, // Vertical centering
+                crossAxisAlignment: CrossAxisAlignment.center, // Horizontal centering
+                children: [
+                  const Text(
+                    'Temperature and Humidity Data',
+                    style: TextStyle(
+                      fontSize: 44, // Bigger font size
+                      fontWeight: FontWeight.bold, // Bold text
+                      color: Colors.white,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  Text(
+                    loRaData,
+                    style: const TextStyle(
+                      fontSize: 32, // Text size for the data itself
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center, // Center-align the data
+                  ),
+                ],
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  // Function to create the icons
-  Widget buildIconTile(String iconPath) {
-    return Image.asset(
-      iconPath,
-      width: 50,
-      height: 50,
     );
   }
 }
